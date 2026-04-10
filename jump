@@ -1,0 +1,146 @@
+local JumpHandler = {}
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local plr = Players.LocalPlayer
+
+local enabled = false
+local infEnabled = false
+local autoEnabled = false
+
+local jumpPower = 50
+local defaultJump = 50
+local mode = "Normal"
+
+local infConn = nil
+local autoConn = nil
+local charConn = nil
+local loop = nil
+
+local function getHumanoid()
+    local char = plr.Character
+    if char then
+        return char:FindFirstChildOfClass("Humanoid")
+    end
+end
+
+local function applyJump()
+    local hum = getHumanoid()
+    if hum then
+        if not defaultJump then
+            defaultJump = hum.JumpPower
+        end
+        hum.UseJumpPower = true
+        hum.JumpPower = enabled and jumpPower or defaultJump
+    end
+end
+
+-- ===== POWER JUMP =====
+function JumpHandler.SetPower(power)
+    jumpPower = power
+end
+
+function JumpHandler.TogglePower(state)
+    enabled = state
+    applyJump()
+end
+
+-- ===== INFINITE JUMP =====
+function JumpHandler.ToggleInf(state)
+    infEnabled = state
+
+    if state then
+        infConn = UIS.JumpRequest:Connect(function()
+            local hum = getHumanoid()
+            if hum then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    else
+        if infConn then
+            infConn:Disconnect()
+            infConn = nil
+        end
+    end
+end
+
+-- ===== AUTO JUMP =====
+local function stopAuto()
+    if autoConn then
+        autoConn:Disconnect()
+        autoConn = nil
+    end
+end
+
+local function startAuto()
+    stopAuto()
+
+    autoConn = RunService.RenderStepped:Connect(function()
+        local hum = getHumanoid()
+        if not hum then return end
+        if hum.FloorMaterial == Enum.Material.Air then return end
+
+        if mode == "Normal" then
+            hum.Jump = true
+
+        elseif mode == "Bhop" then
+            hum.Jump = true
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+
+        elseif mode == "Smart" then
+            if hum.MoveDirection.Magnitude > 0 then
+                hum.Jump = true
+            end
+
+        elseif mode == "Force" then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end)
+end
+
+function JumpHandler.ToggleAuto(state)
+    autoEnabled = state
+    if state then
+        startAuto()
+    else
+        stopAuto()
+    end
+end
+
+function JumpHandler.SetMode(m)
+    mode = m
+end
+
+-- ===== FORCE LOOP (ANTI RESET + RESPAWN) =====
+function JumpHandler.Start()
+    if charConn then return end
+
+    charConn = plr.CharacterAdded:Connect(function()
+        task.wait(0.2)
+        applyJump()
+    end)
+
+    loop = task.spawn(function()
+        while task.wait(0.1) do
+            applyJump()
+        end
+    end)
+end
+
+function JumpHandler.Stop()
+    enabled = false
+    applyJump()
+
+    if infConn then infConn:Disconnect() infConn = nil end
+    if autoConn then autoConn:Disconnect() autoConn = nil end
+    if charConn then charConn:Disconnect() charConn = nil end
+
+    if loop then
+        task.cancel(loop)
+        loop = nil
+    end
+end
+
+return JumpHandler
