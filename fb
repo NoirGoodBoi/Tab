@@ -1,0 +1,83 @@
+local M = {}
+
+local Lighting = game:GetService("Lighting")
+
+-- ===== STATE =====
+local fullbrightEnabled = false
+local fullbrightValue = 5
+
+local old = {}
+local fogRemoved = {}
+
+-- ===== FULLBRIGHT =====
+function M.StartFullbright()
+    if fullbrightEnabled then return end
+    fullbrightEnabled = true
+
+    -- save
+    old.Brightness = Lighting.Brightness
+    old.ClockTime = Lighting.ClockTime
+    old.FogEnd = Lighting.FogEnd
+    old.GlobalShadows = Lighting.GlobalShadows
+
+    -- apply
+    Lighting.Brightness = fullbrightValue
+    Lighting.ClockTime = 14
+    Lighting.FogEnd = 100000
+    Lighting.GlobalShadows = false
+end
+
+function M.StopFullbright()
+    if not fullbrightEnabled then return end
+    fullbrightEnabled = false
+
+    -- restore
+    Lighting.Brightness = old.Brightness
+    Lighting.ClockTime = old.ClockTime
+    Lighting.FogEnd = old.FogEnd
+    Lighting.GlobalShadows = old.GlobalShadows
+end
+
+function M.SetBrightness(v)
+    fullbrightValue = v
+
+    if fullbrightEnabled then
+        Lighting.Brightness = v
+    end
+end
+
+-- ===== REMOVE FOG =====
+function M.StartNoFog()
+    old.FogStart = Lighting.FogStart
+    old.FogEnd = Lighting.FogEnd
+
+    Lighting.FogStart = 0
+    Lighting.FogEnd = 100000
+
+    for _,obj in pairs(Lighting:GetChildren()) do
+        if obj:IsA("Atmosphere")
+        or obj:IsA("BlurEffect")
+        or obj:IsA("ColorCorrectionEffect")
+        or obj:IsA("DepthOfFieldEffect")
+        or obj:IsA("SunRaysEffect") then
+
+            fogRemoved[obj] = obj.Parent
+            obj.Parent = nil
+        end
+    end
+end
+
+function M.StopNoFog()
+    Lighting.FogStart = old.FogStart
+    Lighting.FogEnd = old.FogEnd
+
+    for obj,parent in pairs(fogRemoved) do
+        if obj then
+            obj.Parent = parent
+        end
+    end
+
+    fogRemoved = {}
+end
+
+return M
