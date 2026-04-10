@@ -1,0 +1,137 @@
+--// LOGIC
+local M = {}
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+M.selectedPlayer = nil
+M.RemoteLogs = {}
+M.SpyEnabled = false
+
+-- copy
+function M.copy(text)
+    if setclipboard then
+        setclipboard(text)
+    end
+end
+
+-- get player list
+function M.getPlayerList()
+    local list = {}
+    for _,plr in pairs(Players:GetPlayers()) do
+        table.insert(list, plr.DisplayName.." (@"..plr.Name..")")
+    end
+    return list
+end
+
+-- find player
+function M.findPlayer(str)
+    str = string.lower(str)
+    for _,plr in pairs(Players:GetPlayers()) do
+        if string.find(string.lower(plr.Name), str) 
+        or string.find(string.lower(plr.DisplayName), str) then
+            return plr
+        end
+    end
+end
+
+-- select player
+function M.setPlayer(plr)
+    M.selectedPlayer = plr
+end
+
+-- copy name
+function M.copyName()
+    if M.selectedPlayer then
+        M.copy(M.selectedPlayer.Name)
+    end
+end
+
+-- copy position
+function M.copyPos()
+    local plr = M.selectedPlayer
+    if plr and plr.Character then
+        local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local pos = hrp.Position
+            M.copy(string.format("%.1f,%.1f,%.1f", pos.X, pos.Y, pos.Z))
+        end
+    end
+end
+
+-- teleport
+function M.teleport(x,y,z)
+    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
+    hrp.CFrame = CFrame.new(x,y,z)
+end
+
+-- copy cam
+function M.copyCam()
+    local cam = workspace.CurrentCamera
+    local pos = cam.CFrame.Position
+    M.copy(string.format("%.1f,%.1f,%.1f", pos.X, pos.Y, pos.Z))
+end
+
+-- remote spy toggle
+function M.setSpy(v)
+    M.SpyEnabled = v
+end
+
+-- clear logs
+function M.clearLogs()
+    M.RemoteLogs = {}
+end
+
+-- print logs
+function M.printLogs()
+    for i,v in pairs(M.RemoteLogs) do
+        print(i, v.Type, v.Name, unpack(v.Args or {}))
+    end
+end
+
+-- copy last remote
+function M.copyLast()
+    local last = M.RemoteLogs[#M.RemoteLogs]
+    if last then
+        M.copy(last.Name)
+    end
+end
+
+-- remote spy hook (chạy 1 lần)
+function M.initSpy()
+    if getgenv().RemoteSpyLoaded then return end
+    getgenv().RemoteSpyLoaded = true
+
+    task.spawn(function()
+        task.wait(2)
+
+        pcall(function()
+            local mt = getrawmetatable(game)
+            if not mt then return end
+
+            local old = mt.__namecall
+            setreadonly(mt, false)
+
+            mt.__namecall = newcclosure(function(self, ...)
+                local method = getnamecallmethod()
+                local args = {...}
+
+                if M.SpyEnabled and (method == "FireServer" or method == "InvokeServer") then
+                    table.insert(M.RemoteLogs, {
+                        Type = method,
+                        Name = tostring(self),
+                        Args = args
+                    })
+                    print("📡", method, self)
+                end
+
+                return old(self, ...)
+            end)
+
+            setreadonly(mt, true)
+        end)
+    end)
+end
+
+return M
