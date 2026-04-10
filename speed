@@ -1,0 +1,46 @@
+-- SpeedHandler
+local SpeedHandler = {}
+
+local loop = nil
+local currentSpeed = 16
+local defaultSpeed = nil
+
+function SpeedHandler.Start(speed)
+    local plr = game.Players.LocalPlayer
+    currentSpeed = speed
+
+    if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+        if not defaultSpeed then
+            defaultSpeed = plr.Character.Humanoid.WalkSpeed
+        end
+    end
+
+    if loop then return end
+
+    loop = task.spawn(function()
+        while task.wait() do
+            if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+                plr.Character.Humanoid.WalkSpeed = currentSpeed
+            end
+        end
+    end)
+end
+
+function SpeedHandler.Stop()
+    local plr = game.Players.LocalPlayer
+
+    if loop then
+        task.cancel(loop)
+        loop = nil
+    end
+
+    if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+        plr.Character.Humanoid.WalkSpeed = defaultSpeed or 16
+    end
+end
+
+function SpeedHandler.Update(speed)
+    currentSpeed = speed
+end
+
+return SpeedHandler
