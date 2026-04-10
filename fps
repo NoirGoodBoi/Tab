@@ -1,0 +1,102 @@
+local M = {}
+
+local Lighting = game:GetService("Lighting")
+local RunService = game:GetService("RunService")
+
+-- ===== STATE =====
+local boostEnabled = false
+local ultraEnabled = false
+
+local disabled = {}
+local conn
+
+-- ===== APPLY EFFECT =====
+local function handle(obj)
+    if obj:IsA("ParticleEmitter")
+    or obj:IsA("Trail")
+    or obj:IsA("Smoke")
+    or obj:IsA("Fire")
+    or obj:IsA("Sparkles") then
+
+        disabled[obj] = obj.Enabled
+        obj.Enabled = false
+
+    elseif obj:IsA("BasePart") and ultraEnabled then
+        disabled[obj] = obj.Material
+        obj.Material = Enum.Material.SmoothPlastic
+
+    elseif (obj:IsA("Texture") or obj:IsA("Decal")) and ultraEnabled then
+        disabled[obj] = obj.Transparency
+        obj.Transparency = 1
+    end
+end
+
+-- ===== START =====
+function M.StartBoost()
+    if boostEnabled then return end
+    boostEnabled = true
+
+    Lighting.GlobalShadows = false
+
+    -- scan 1 lần
+    for _,obj in pairs(workspace:GetDescendants()) do
+        handle(obj)
+    end
+
+    -- track object mới
+    conn = workspace.DescendantAdded:Connect(handle)
+end
+
+function M.StopBoost()
+    boostEnabled = false
+
+    Lighting.GlobalShadows = true
+
+    if conn then
+        conn:Disconnect()
+        conn = nil
+    end
+
+    for obj,val in pairs(disabled) do
+        pcall(function()
+            if obj then
+                if obj:IsA("BasePart") then
+                    obj.Material = val
+                elseif obj:IsA("Texture") or obj:IsA("Decal") then
+                    obj.Transparency = val
+                else
+                    obj.Enabled = val
+                end
+            end
+        end)
+    end
+
+    disabled = {}
+end
+
+-- ===== ULTRA =====
+function M.StartUltra()
+    ultraEnabled = true
+
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+    M.StartBoost()
+
+    workspace.Terrain.WaterWaveSize = 0
+    workspace.Terrain.WaterWaveSpeed = 0
+    workspace.Terrain.WaterReflectance = 0
+    workspace.Terrain.WaterTransparency = 1
+end
+
+function M.StopUltra()
+    ultraEnabled = false
+
+    settings().Rendering.QualityLevel = Enum.QualityLevel.Automatic
+    M.StopBoost()
+end
+
+-- ===== FPS =====
+function M.SetFPSCap(v)
+    setfpscap(v)
+end
+
+return M
