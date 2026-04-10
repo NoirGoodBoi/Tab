@@ -1,41 +1,81 @@
--- SpeedHandler
 local SpeedHandler = {}
+
+local Players = game:GetService("Players")
+local plr = Players.LocalPlayer
 
 local loop = nil
 local currentSpeed = 16
 local defaultSpeed = nil
+local enabled = false
+local charConn = nil
+
+-- apply ngay lập tức
+local function applySpeed(char)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        if not defaultSpeed then
+            defaultSpeed = hum.WalkSpeed
+        end
+        hum.WalkSpeed = currentSpeed
+    end
+end
 
 function SpeedHandler.Start(speed)
-    local plr = game.Players.LocalPlayer
     currentSpeed = speed
+    enabled = true
 
-    if plr.Character and plr.Character:FindFirstChild("Humanoid") then
-        if not defaultSpeed then
-            defaultSpeed = plr.Character.Humanoid.WalkSpeed
-        end
+    -- apply nếu đã có char
+    if plr.Character then
+        applySpeed(plr.Character)
     end
 
-    if loop then return end
-
-    loop = task.spawn(function()
-        while task.wait() do
-            if plr.Character and plr.Character:FindFirstChild("Humanoid") then
-                plr.Character.Humanoid.WalkSpeed = currentSpeed
+    -- hook respawn
+    if not charConn then
+        charConn = plr.CharacterAdded:Connect(function(char)
+            task.wait(0.2) -- đợi humanoid load
+            if enabled then
+                applySpeed(char)
             end
-        end
-    end)
+        end)
+    end
+
+    -- loop force (anti overwrite)
+    if not loop then
+        loop = task.spawn(function()
+            while task.wait(0.1) do
+                if not enabled then break end
+
+                local char = plr.Character
+                if char then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum and hum.WalkSpeed ~= currentSpeed then
+                        hum.WalkSpeed = currentSpeed
+                    end
+                end
+            end
+        end)
+    end
 end
 
 function SpeedHandler.Stop()
-    local plr = game.Players.LocalPlayer
+    enabled = false
 
     if loop then
         task.cancel(loop)
         loop = nil
     end
 
-    if plr.Character and plr.Character:FindFirstChild("Humanoid") then
-        plr.Character.Humanoid.WalkSpeed = defaultSpeed or 16
+    if charConn then
+        charConn:Disconnect()
+        charConn = nil
+    end
+
+    local char = plr.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.WalkSpeed = defaultSpeed or 16
+        end
     end
 end
 
