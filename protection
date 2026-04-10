@@ -1,0 +1,159 @@
+--// PROTECTION LOGIC
+local M = {}
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+
+M.Toggles = {
+    AntiFling = false,
+    ForceCleaner = false,
+    AntiSit = false,
+    AntiSlow = false,
+    AntiVoid = false,
+    SafePosition = false,
+    VelocityClamp = false,
+    AntiFreeze = false,
+    SmartAntiTP = false,
+    ModeRage = false,
+    AntiStun = false
+}
+
+M.LastSafePos = nil
+M.AntiKickLoaded = false
+
+-- helpers
+local function getChar()
+    return LocalPlayer.Character
+end
+
+local function getHum()
+    local c = getChar()
+    return c and c:FindFirstChildOfClass("Humanoid")
+end
+
+local function getHRP()
+    local c = getChar()
+    return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+-- reset
+LocalPlayer.CharacterAdded:Connect(function()
+    M.LastSafePos = nil
+end)
+
+-- fix ragdoll / stun
+function M.fixCharacter(hum, root)
+    if not hum or not root then return end
+
+    if hum.PlatformStand 
+    or hum:GetState() == Enum.HumanoidStateType.Physics
+    or hum:GetState() == Enum.HumanoidStateType.Ragdoll then
+        
+        hum.PlatformStand = false
+        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        root.AssemblyAngularVelocity = Vector3.zero
+    end
+end
+
+-- toggle setter
+function M.setToggle(name, value)
+    if M.Toggles[name] ~= nil then
+        M.Toggles[name] = value
+    end
+end
+
+-- anti kick
+function M.antiKick()
+    if M.AntiKickLoaded then return end
+    M.AntiKickLoaded = true
+
+    local mt = getrawmetatable(game)
+    setreadonly(mt, false)
+
+    local old = mt.__namecall
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+
+        if method == "Kick" or tostring(self) == "Kick" then
+            return nil
+        end
+
+        return old(self, ...)
+    end)
+
+    setreadonly(mt, true)
+end
+
+-- anti afk
+function M.antiAFK()
+    for _,v in pairs(getconnections(LocalPlayer.Idled)) do
+        v:Disable()
+    end
+
+    LocalPlayer.Idled:Connect(function()
+        game:GetService("VirtualUser"):Button2Down(Vector2.new(), workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        game:GetService("VirtualUser"):Button2Up(Vector2.new(), workspace.CurrentCamera.CFrame)
+    end)
+end
+
+-- MAIN LOOP
+function M.start()
+    RunService.Heartbeat:Connect(function()
+        local hum = getHum()
+        local hrp = getHRP()
+        if not hum or not hrp then return end
+
+        local vel = hrp.AssemblyLinearVelocity
+
+        if (M.Toggles.AntiFling or M.Toggles.VelocityClamp) and vel.Magnitude > 120 then
+            hrp.AssemblyLinearVelocity = Vector3.new(0, vel.Y, 0)
+        end
+
+        if M.Toggles.ForceCleaner and tick() % 0.3 < 0.03 then
+            for _,v in ipairs(hrp:GetChildren()) do
+                if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then
+                    v:Destroy()
+                end
+            end
+        end
+
+        if M.Toggles.AntiSit and hum.Sit then
+            hum.Sit = false
+        end
+
+        if M.Toggles.AntiFreeze and hum.PlatformStand then
+            hum.PlatformStand = false
+        end
+
+        if M.Toggles.AntiSlow then
+            local target = M.Toggles.ModeRage and 48 or 16
+            if math.abs(hum.WalkSpeed - target) > 1 then
+                hum.WalkSpeed = target
+            end
+        end
+
+        if M.Toggles.AntiVoid and hrp.Position.Y < -10 then
+            hrp.CFrame = CFrame.new(0,10,0)
+        end
+
+        if M.Toggles.SafePosition then
+            M.LastSafePos = M.LastSafePos or hrp.Position
+            local dist = (hrp.Position - M.LastSafePos).Magnitude
+
+            if dist < 30 then
+                M.LastSafePos = hrp.Position
+            elseif dist > 100 then
+                hrp.CFrame = CFrame.new(M.LastSafePos)
+            end
+        end
+
+        if M.Toggles.AntiStun then
+            M.fixCharacter(hum, hrp)
+        end
+    end)
+end
+
+return M
