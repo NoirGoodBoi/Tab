@@ -1,0 +1,71 @@
+local M = {}
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- ===== THIRD PERSON =====
+local thirdConn
+
+function M.StartThird()
+    if thirdConn then return end
+
+    thirdConn = RunService.RenderStepped:Connect(function()
+        LocalPlayer.CameraMode = Enum.CameraMode.Classic
+        LocalPlayer.CameraMinZoomDistance = 5
+        LocalPlayer.CameraMaxZoomDistance = 50
+    end)
+end
+
+function M.StopThird()
+    if thirdConn then
+        thirdConn:Disconnect()
+        thirdConn = nil
+    end
+end
+
+-- ===== FIRST PERSON =====
+function M.FirstPerson()
+    LocalPlayer.CameraMode = Enum.CameraMode.LockFirstPerson
+    LocalPlayer.CameraMinZoomDistance = 0
+    LocalPlayer.CameraMaxZoomDistance = 0
+end
+
+function M.ResetCamera()
+    LocalPlayer.CameraMode = Enum.CameraMode.Classic
+    LocalPlayer.CameraMinZoomDistance = 0
+    LocalPlayer.CameraMaxZoomDistance = 50
+end
+
+-- ===== LOCK CAMERA =====
+local lockConn
+local savedCFrame
+
+function M.StartLock()
+    savedCFrame = Camera.CFrame
+
+    if lockConn then return end
+
+    lockConn = RunService.RenderStepped:Connect(function()
+        if savedCFrame then
+            Camera.CFrame = savedCFrame
+        end
+    end)
+end
+
+function M.StopLock()
+    if lockConn then
+        lockConn:Disconnect()
+        lockConn = nil
+    end
+    savedCFrame = nil
+end
+
+-- ===== FOV =====
+function M.SetFOV(v)
+    Camera.FieldOfView = v
+end
+
+return M
