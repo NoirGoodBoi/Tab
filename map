@@ -1,0 +1,98 @@
+local M = {}
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local MapGui, MapFrame, InfoPanel
+local MapObjects = {}
+
+local RenderConnection
+local Zoom = 4
+local SmoothYaw = 0
+local CurrentTarget = nil
+local TPMode = false
+
+-- ===== CREATE =====
+local function createMap()
+    MapGui = Instance.new("ScreenGui")
+    MapGui.IgnoreGuiInset = true
+    MapGui.ResetOnSpawn = false
+    MapGui.Parent = game.CoreGui
+
+    MapFrame = Instance.new("Frame")
+    MapFrame.Size = UDim2.new(0,150,0,150)
+    MapFrame.Position = UDim2.new(1,-160,0,10)
+    MapFrame.BackgroundTransparency = 0.4
+    MapFrame.Parent = MapGui
+    Instance.new("UICorner", MapFrame)
+end
+
+local function createDot(player)
+    if MapObjects[player] then return end
+
+    local dot = Instance.new("Frame")
+    dot.Size = UDim2.new(0,6,0,6)
+    dot.AnchorPoint = Vector2.new(0.5,0.5)
+    dot.Parent = MapFrame
+
+    MapObjects[player] = dot
+end
+
+-- ===== UPDATE =====
+local function update(dt)
+    local char = LocalPlayer.Character
+    local center = char and char:FindFirstChild("HumanoidRootPart")
+    if not center then return end
+
+    local targetYaw = math.atan2(Camera.CFrame.LookVector.Z, Camera.CFrame.LookVector.X)
+    SmoothYaw += (targetYaw - SmoothYaw) * math.clamp(dt * 8, 0, 1)
+
+    for player, dot in pairs(MapObjects) do
+        local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+
+        if hrp then
+            local offset = (hrp.Position - center.Position) / Zoom
+
+            local rx = offset.X*math.cos(SmoothYaw) + offset.Z*math.sin(SmoothYaw)
+            local rz = -offset.X*math.sin(SmoothYaw) + offset.Z*math.cos(SmoothYaw)
+
+            dot.Position = UDim2.new(0.5, rx, 0.5, rz)
+            dot.Visible = math.abs(rx) <= 70 and math.abs(rz) <= 70
+        else
+            dot.Visible = false
+        end
+    end
+end
+
+-- ===== START / STOP =====
+function M.Start()
+    if not MapGui then
+        createMap()
+        for _,p in pairs(Players:GetPlayers()) do
+            createDot(p)
+        end
+        Players.PlayerAdded:Connect(createDot)
+    end
+
+    MapGui.Enabled = true
+
+    if not RenderConnection then
+        RenderConnection = RunService.RenderStepped:Connect(update)
+    end
+end
+
+function M.Stop()
+    if MapGui then
+        MapGui.Enabled = false
+    end
+
+    if RenderConnection then
+        RenderConnection:Disconnect()
+        RenderConnection = nil
+    end
+end
+
+return M
