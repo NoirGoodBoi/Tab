@@ -1,0 +1,111 @@
+local M = {}
+
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+
+local statsGui
+local fpsFrame, memFrame
+local loopConn
+
+local fpsEnabled = false
+local memEnabled = false
+
+-- ===== CREATE =====
+local function create()
+    if statsGui then return end
+
+    statsGui = Instance.new("ScreenGui")
+    statsGui.Name = "NoirStats"
+    statsGui.IgnoreGuiInset = true
+    statsGui.ResetOnSpawn = false
+    statsGui.Parent = game.CoreGui
+
+    fpsFrame = Instance.new("TextLabel")
+    fpsFrame.Size = UDim2.new(0,140,0,25)
+    fpsFrame.Position = UDim2.new(0,10,0,60)
+    fpsFrame.BackgroundTransparency = 0.5
+    fpsFrame.Text = ""
+    fpsFrame.Parent = statsGui
+    Instance.new("UICorner", fpsFrame)
+
+    memFrame = Instance.new("TextLabel")
+    memFrame.Size = UDim2.new(0,140,0,25)
+    memFrame.Position = UDim2.new(0,10,0,90)
+    memFrame.BackgroundTransparency = 0.4
+    memFrame.Text = ""
+    memFrame.Parent = statsGui
+    Instance.new("UICorner", memFrame)
+end
+
+-- ===== LOOP =====
+local function startLoop()
+    if loopConn then return end
+
+    loopConn = RunService.RenderStepped:Connect(function(dt)
+        if fpsEnabled and fpsFrame then
+            local pingStat = Stats.Network.ServerStatsItem:FindFirstChild("Data Ping")
+            local ping = pingStat and math.floor(pingStat:GetValue()) or 0
+            local fps = math.floor(1/dt)
+
+            fpsFrame.Text = "Ping: "..ping.." | FPS: "..fps
+        end
+
+        if memEnabled and memFrame then
+            local mem = math.floor(Stats:GetTotalMemoryUsageMb())
+            memFrame.Text = "Memory: "..mem.." MB"
+        end
+    end)
+end
+
+local function stopLoop()
+    if loopConn then
+        loopConn:Disconnect()
+        loopConn = nil
+    end
+end
+
+local function cleanup()
+    stopLoop()
+
+    if statsGui then
+        statsGui:Destroy()
+        statsGui = nil
+        fpsFrame = nil
+        memFrame = nil
+    end
+end
+
+-- ===== API =====
+function M.ToggleFPS(state)
+    fpsEnabled = state
+
+    if state then
+        create()
+        startLoop()
+        fpsFrame.Visible = true
+    else
+        if fpsFrame then fpsFrame.Visible = false end
+    end
+
+    if not fpsEnabled and not memEnabled then
+        cleanup()
+    end
+end
+
+function M.ToggleMemory(state)
+    memEnabled = state
+
+    if state then
+        create()
+        startLoop()
+        memFrame.Visible = true
+    else
+        if memFrame then memFrame.Visible = false end
+    end
+
+    if not fpsEnabled and not memEnabled then
+        cleanup()
+    end
+end
+
+return M
