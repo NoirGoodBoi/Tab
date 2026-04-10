@@ -1,4 +1,4 @@
---// PROTECTION LOGIC
+--// PROTECTION ENGINE FINAL
 local M = {}
 
 local Players = game:GetService("Players")
@@ -6,6 +6,7 @@ local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
 
+-- STATES
 M.Toggles = {
     AntiFling = false,
     ForceCleaner = false,
@@ -17,13 +18,14 @@ M.Toggles = {
     AntiFreeze = false,
     SmartAntiTP = false,
     ModeRage = false,
-    AntiStun = false
+    AntiStun = false,
+    Debug = false
 }
 
 M.LastSafePos = nil
 M.AntiKickLoaded = false
 
--- helpers
+-- HELPERS
 local function getChar()
     return LocalPlayer.Character
 end
@@ -38,12 +40,12 @@ local function getHRP()
     return c and c:FindFirstChild("HumanoidRootPart")
 end
 
--- reset
+-- RESET
 LocalPlayer.CharacterAdded:Connect(function()
     M.LastSafePos = nil
 end)
 
--- fix ragdoll / stun
+-- FIX STUN
 function M.fixCharacter(hum, root)
     if not hum or not root then return end
 
@@ -57,14 +59,30 @@ function M.fixCharacter(hum, root)
     end
 end
 
--- toggle setter
+-- DETECT FLING
+function M.detectFling(hrp)
+    local vel = hrp.AssemblyLinearVelocity
+
+    if vel.Magnitude > 120 then
+        for _,plr in pairs(Players:GetPlayers()) do
+            if plr ~= LocalPlayer and plr.Character then
+                local other = plr.Character:FindFirstChild("HumanoidRootPart")
+                if other and (other.Position - hrp.Position).Magnitude < 10 then
+                    return plr
+                end
+            end
+        end
+    end
+end
+
+-- SET TOGGLE
 function M.setToggle(name, value)
     if M.Toggles[name] ~= nil then
         M.Toggles[name] = value
     end
 end
 
--- anti kick
+-- ANTI KICK
 function M.antiKick()
     if M.AntiKickLoaded then return end
     M.AntiKickLoaded = true
@@ -86,7 +104,7 @@ function M.antiKick()
     setreadonly(mt, true)
 end
 
--- anti afk
+-- ANTI AFK
 function M.antiAFK()
     for _,v in pairs(getconnections(LocalPlayer.Idled)) do
         v:Disable()
@@ -99,7 +117,7 @@ function M.antiAFK()
     end)
 end
 
--- MAIN LOOP
+-- START LOOP
 function M.start()
     RunService.Heartbeat:Connect(function()
         local hum = getHum()
@@ -108,10 +126,29 @@ function M.start()
 
         local vel = hrp.AssemblyLinearVelocity
 
-        if (M.Toggles.AntiFling or M.Toggles.VelocityClamp) and vel.Magnitude > 120 then
-            hrp.AssemblyLinearVelocity = Vector3.new(0, vel.Y, 0)
+        -- SMART FLING DETECT
+        local attacker = M.detectFling(hrp)
+        if attacker and M.Toggles.Debug then
+            print("⚠️ Fling by:", attacker.Name)
         end
 
+        -- VELOCITY CLAMP (ADAPTIVE)
+        if (M.Toggles.AntiFling or M.Toggles.VelocityClamp) then
+            local limit = M.Toggles.ModeRage and 200 or 120
+
+            if vel.Magnitude > limit then
+                hrp.AssemblyLinearVelocity = vel.Unit * limit
+            end
+
+            -- EMERGENCY ANCHOR
+            if vel.Magnitude > 300 then
+                hrp.Anchored = true
+                task.wait(0.1)
+                hrp.Anchored = false
+            end
+        end
+
+        -- FORCE CLEAN
         if M.Toggles.ForceCleaner and tick() % 0.3 < 0.03 then
             for _,v in ipairs(hrp:GetChildren()) do
                 if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then
@@ -120,14 +157,17 @@ function M.start()
             end
         end
 
+        -- SIT FIX
         if M.Toggles.AntiSit and hum.Sit then
             hum.Sit = false
         end
 
+        -- FREEZE FIX
         if M.Toggles.AntiFreeze and hum.PlatformStand then
             hum.PlatformStand = false
         end
 
+        -- SPEED FIX
         if M.Toggles.AntiSlow then
             local target = M.Toggles.ModeRage and 48 or 16
             if math.abs(hum.WalkSpeed - target) > 1 then
@@ -135,23 +175,33 @@ function M.start()
             end
         end
 
+        -- VOID
         if M.Toggles.AntiVoid and hrp.Position.Y < -10 then
             hrp.CFrame = CFrame.new(0,10,0)
         end
 
+        -- SAFE POS (SMART)
         if M.Toggles.SafePosition then
             M.LastSafePos = M.LastSafePos or hrp.Position
+
             local dist = (hrp.Position - M.LastSafePos).Magnitude
+            local speed = vel.Magnitude
 
             if dist < 30 then
                 M.LastSafePos = hrp.Position
-            elseif dist > 100 then
+            elseif dist > 100 and speed < 50 then
                 hrp.CFrame = CFrame.new(M.LastSafePos)
             end
         end
 
+        -- STUN FIX
         if M.Toggles.AntiStun then
             M.fixCharacter(hum, hrp)
+        end
+
+        -- DEBUG
+        if M.Toggles.Debug then
+            print("Vel:", vel.Magnitude, "| State:", hum:GetState())
         end
     end)
 end
